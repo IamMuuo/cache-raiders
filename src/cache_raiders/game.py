@@ -28,7 +28,6 @@ class Game:
 
     def _update(self) -> None:
         self._player.update(self._delta_time)
-        pass
 
     def _render(self) -> None:
         self._screen.fill("black")
