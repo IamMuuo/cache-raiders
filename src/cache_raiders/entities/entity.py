@@ -17,5 +17,5 @@ class Entity(ABC):
     def update(self, delta: float) -> None:
         raise NotImplementedError
 
-    def handle_input(self) -> None:
+    def handle_input(self, event: pygame.event.Event) -> None:
         pass
