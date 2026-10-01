@@ -6,14 +6,30 @@ from .particle_emitter import ParticleEmitter
 
 
 class Player(Entity):
-    def __init__(self, screen_width: int) -> None:
+    SPRITE_SIZE = 128
+
+    def __init__(
+        self,
+        screen_width: int,
+        spawn_position: Vector2,
+    ) -> None:
         self._speed = 120
         self._screen_width = screen_width
         texture = pygame.image.load("assets/images/rocket.png").convert_alpha()
-        self._texture = pygame.transform.smoothscale(texture, (128, 128))
+        self._texture = pygame.transform.smoothscale(
+            texture,
+            (self.SPRITE_SIZE, self.SPRITE_SIZE),
+        )
         super().__init__()
+        self._position = Vector2(spawn_position)
         self._emitter = ParticleEmitter()
         self._sync_emitter_position()
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return self._texture.get_rect(
+            topleft=(int(self._position.x), int(self._position.y))
+        )
 
     def render(self, surface: pygame.Surface) -> None:
         self._emitter.render(surface)
