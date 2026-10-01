@@ -1,7 +1,7 @@
 [project]
 name = "cache-raiders"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Pygame demo comparing object and packed-array entity storage"
 readme = "README.md"
 authors = [
     { name = "Erick", email = "hearteric57@gmail.com" }
