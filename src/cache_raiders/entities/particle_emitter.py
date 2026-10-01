@@ -25,6 +25,10 @@ class ParticleEmitter(Entity):
         self._particles_per_emission = 1
         self._particles: list[Particle] = []
 
+    @property
+    def particle_count(self) -> int:
+        return len(self._particles)
+
     def set_position(self, position: Vector2) -> None:
         self._position = Vector2(position)
 
