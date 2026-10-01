@@ -22,6 +22,7 @@ class ParticleEmitter(Entity):
         self._emission_interval = emission_interval
         self._particle_lifetime = particle_lifetime
         self._time_since_emission = 0.0
+        self._particles_per_emission = 1
         self._particles: list[Particle] = []
 
     def set_position(self, position: Vector2) -> None:
@@ -39,11 +40,18 @@ class ParticleEmitter(Entity):
         self._time_since_emission += delta
         while self._time_since_emission >= self._emission_interval:
             self._time_since_emission -= self._emission_interval
-            self._emit_particle()
+            for _ in range(self._particles_per_emission):
+                self._emit_particle()
 
     def handle_input(self, event: pygame.event.Event) -> None:
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+        if event.type != pygame.KEYDOWN:
+            return
+
+        if event.key == pygame.K_p:
+            self._particles_per_emission += 1
             self._emit_burst(60)
+        elif event.key == pygame.K_o:
+            self._particles_per_emission = max(0, self._particles_per_emission - 1)
 
     def _emit_burst(self, count: int) -> None:
         for _ in range(count):

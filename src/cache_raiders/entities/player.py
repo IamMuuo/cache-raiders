@@ -52,6 +52,8 @@ class Player(Entity):
         )
         if plus_pressed:
             self._speed += 100
+        elif event.key == pygame.K_MINUS:
+            self._speed = max(0, self._speed - 100)
 
     def _sync_emitter_position(self) -> None:
         self._emitter.set_position(self._position + Vector2(8, 64))
