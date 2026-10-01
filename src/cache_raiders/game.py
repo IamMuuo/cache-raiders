@@ -12,6 +12,9 @@ from cache_raiders.entities.player import (
     PlayerPositionMode,
 )
 
+PERFORMANCE_SAMPLE_WINDOW = 120
+MIN_PERFORMANCE_SAMPLES = 30
+
 
 class Game:
     def __init__(self) -> None:
@@ -23,13 +26,22 @@ class Game:
         self._clock = pygame.time.Clock()
         self._delta_time = 0
         self._hud_font = pygame.font.Font(None, 22)
-        self._hud_panel = pygame.Surface((440, 310), pygame.SRCALPHA)
+        self._hud_panel = pygame.Surface((520, 408), pygame.SRCALPHA)
 
         self._particle_storage_mode = ParticleStorageMode.AOS
         self._player_position_mode = PlayerPositionMode.AOS
         self._player_position_arrays = PlayerPositionArrays()
         self._player_position_samples: dict[PlayerPositionMode, deque[float]] = {
-            mode: deque(maxlen=120) for mode in PlayerPositionMode
+            mode: deque(maxlen=PERFORMANCE_SAMPLE_WINDOW)
+            for mode in PlayerPositionMode
+        }
+        self._particle_update_samples: dict[ParticleStorageMode, deque[float]] = {
+            mode: deque(maxlen=PERFORMANCE_SAMPLE_WINDOW)
+            for mode in ParticleStorageMode
+        }
+        self._particle_render_samples: dict[ParticleStorageMode, deque[float]] = {
+            mode: deque(maxlen=PERFORMANCE_SAMPLE_WINDOW)
+            for mode in ParticleStorageMode
         }
         self._players: list[Player] = []
         self._spawn_players(5)
@@ -60,12 +72,26 @@ class Game:
         self._player_position_samples[self._player_position_mode].append(elapsed)
 
         for player in self._players:
+            player.sync_emitter_position()
+
+        # Keep particle simulation timing separate from movement and drawing.
+        particle_start = perf_counter()
+        for player in self._players:
             player.update_emitter(self._delta_time)
+        elapsed = (perf_counter() - particle_start) * 1_000_000
+        self._particle_update_samples[self._particle_storage_mode].append(elapsed)
 
     def _render(self) -> None:
         self._screen.fill("black")
+        # Draw effects as one pass so their AoS/SoA cost can be compared directly.
+        particle_start = perf_counter()
         for player in self._players:
-            player.render(self._screen)
+            player.render_particles(self._screen)
+        elapsed = (perf_counter() - particle_start) * 1_000_000
+        self._particle_render_samples[self._particle_storage_mode].append(elapsed)
+
+        for player in self._players:
+            player.render_ship(self._screen)
         self._render_hud()
         pygame.display.flip()
 
@@ -81,6 +107,8 @@ class Game:
                 self._toggle_particle_storage()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_v:
                 self._toggle_player_position_mode()
+            elif event.type == pygame.KEYDOWN and event.key in (pygame.K_p, pygame.K_o):
+                self._reset_particle_samples()
 
             for player in self._players:
                 player.handle_input(event)
@@ -101,6 +129,7 @@ class Game:
             self._players.append(player)
             existing_rects.append(player.rect)
         self._reset_player_position_samples()
+        self._reset_particle_samples()
 
     def _toggle_particle_storage(self) -> None:
         if self._particle_storage_mode is ParticleStorageMode.AOS:
@@ -130,10 +159,19 @@ class Game:
         if self._player_position_mode is PlayerPositionMode.SOA:
             self._player_position_arrays.truncate(keep_count)
         self._reset_player_position_samples()
+        self._reset_particle_samples()
 
     def _reset_player_position_samples(self) -> None:
         for samples in self._player_position_samples.values():
             samples.clear()
+
+    def _reset_particle_samples(self) -> None:
+        for sample_set in (
+            self._particle_update_samples,
+            self._particle_render_samples,
+        ):
+            for samples in sample_set.values():
+                samples.clear()
 
     def _find_spawn_position(
         self,
@@ -169,14 +207,12 @@ class Game:
     def _render_hud(self) -> None:
         particle_count = sum(player.particle_count for player in self._players)
         ship_count = len(self._players)
-        storage_label = (
-            "AoS (faster)"
-            if self._particle_storage_mode is ParticleStorageMode.AOS
-            else self._particle_storage_mode.value
-        )
-        aos_time = self._average_position_time(PlayerPositionMode.AOS)
-        soa_time = self._average_position_time(PlayerPositionMode.SOA)
-        position_winner = self._position_update_winner()
+        player_aos = self._player_position_samples[PlayerPositionMode.AOS]
+        player_soa = self._player_position_samples[PlayerPositionMode.SOA]
+        particle_aos = self._particle_update_samples[ParticleStorageMode.AOS]
+        particle_soa = self._particle_update_samples[ParticleStorageMode.SOA]
+        render_aos = self._particle_render_samples[ParticleStorageMode.AOS]
+        render_soa = self._particle_render_samples[ParticleStorageMode.SOA]
         lines = (
             f"Ships: {ship_count}",
             f"Particles: {particle_count}",
@@ -184,12 +220,19 @@ class Game:
             f"FPS: {self._clock.get_fps():.0f}",
             "Ships: R +20  |  F -20 (min 1)",
             "Particles/player: P +1  |  O -1",
-            "P also emits a 60-particle burst",
+            "P also emits 60 burst particles/player",
             "Speed: Shift+= faster  |  - slower",
-            f"Particle storage: B toggle ({storage_label})",
+            f"Particle storage: B toggle ({self._particle_storage_mode.value})",
             f"Player positions: V toggle ({self._player_position_mode.value})",
-            f"Player update us: AoS {aos_time} | SoA {soa_time}",
-            f"Faster player layout: {position_winner}",
+            f"Player update us: AoS {self._average_time(player_aos)} "
+            f"| SoA {self._average_time(player_soa)}",
+            f"Faster player layout: {self._faster_layout(player_aos, player_soa)}",
+            f"Particle update us: AoS {self._average_time(particle_aos)} "
+            f"| SoA {self._average_time(particle_soa)}",
+            f"Faster particle layout: {self._faster_layout(particle_aos, particle_soa)}",
+            f"Particle draw us: AoS {self._average_time(render_aos)} "
+            f"| SoA {self._average_time(render_soa)}",
+            f"Faster particle draw: {self._faster_layout(render_aos, render_soa)}",
         )
 
         self._hud_panel.fill((8, 12, 20, 220))
@@ -200,19 +243,29 @@ class Game:
 
         self._screen.blit(self._hud_panel, (12, 12))
 
-    def _average_position_time(self, mode: PlayerPositionMode) -> str:
-        samples = self._player_position_samples[mode]
-        if len(samples) < 30:
+    def _average_time(self, samples: deque[float]) -> str:
+        if len(samples) < MIN_PERFORMANCE_SAMPLES:
             return "measuring"
         return f"{sum(samples) / len(samples):.1f}"
 
-    def _position_update_winner(self) -> str:
-        aos_samples = self._player_position_samples[PlayerPositionMode.AOS]
-        soa_samples = self._player_position_samples[PlayerPositionMode.SOA]
-        if len(aos_samples) < 30 or len(soa_samples) < 30:
+    def _faster_layout(
+        self,
+        aos_samples: deque[float],
+        soa_samples: deque[float],
+    ) -> str:
+        if (
+            len(aos_samples) < MIN_PERFORMANCE_SAMPLES
+            or len(soa_samples) < MIN_PERFORMANCE_SAMPLES
+        ):
             return "measuring"
         aos_average = sum(aos_samples) / len(aos_samples)
         soa_average = sum(soa_samples) / len(soa_samples)
+        if aos_average == soa_average:
+            return "tie"
+
+        faster_time = min(aos_average, soa_average)
+        slower_time = max(aos_average, soa_average)
+        percent_faster = (slower_time - faster_time) / slower_time * 100
         if aos_average < soa_average:
-            return "AoS"
-        return "SoA"
+            return f"AoS ({percent_faster:.1f}% faster)"
+        return f"SoA ({percent_faster:.1f}% faster)"

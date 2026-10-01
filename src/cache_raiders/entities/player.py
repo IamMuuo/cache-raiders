@@ -77,7 +77,7 @@ class Player(Entity):
         self._position_arrays: PlayerPositionArrays | None = None
         self._position_index = 0
         self._emitter = ParticleEmitter()
-        self._sync_emitter_position()
+        self.sync_emitter_position()
 
     @property
     def position(self) -> Vector2:
@@ -124,11 +124,18 @@ class Player(Entity):
         self._position_arrays = None
 
     def render(self, surface: pygame.Surface) -> None:
+        self.render_particles(surface)
+        self.render_ship(surface)
+
+    def render_particles(self, surface: pygame.Surface) -> None:
         self._emitter.render(surface)
+
+    def render_ship(self, surface: pygame.Surface) -> None:
         surface.blit(self._texture, self.position)
 
     def update(self, delta: float) -> None:
         self.update_position(delta)
+        self.sync_emitter_position()
         self.update_emitter(delta)
 
     def update_position(self, delta: float) -> None:
@@ -145,8 +152,10 @@ class Player(Entity):
             self._position.x = -self._texture.get_width()
 
     def update_emitter(self, delta: float) -> None:
-        self._sync_emitter_position()
         self._emitter.update(delta)
+
+    def sync_emitter_position(self) -> None:
+        self._emitter.set_position(self.position + Vector2(8, 64))
 
     def handle_input(self, event: pygame.event.Event) -> None:
         self._emitter.handle_input(event)
@@ -162,6 +171,3 @@ class Player(Entity):
             self._speed = max(0, self._speed - 100)
         if self._position_arrays is not None:
             self._position_arrays.speed[self._position_index] = self._speed
-
-    def _sync_emitter_position(self) -> None:
-        self._emitter.set_position(self.position + Vector2(8, 64))

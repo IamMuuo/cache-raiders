@@ -28,7 +28,7 @@ not depend on the directory from which you launch it.
 | `F` | Remove 20 ships, keeping at least one |
 | `B` | Switch particle storage between AoS and SoA |
 | `V` | Switch player-position storage between AoS and SoA |
-| `P` | Add one particle per emission and emit a 60-particle burst |
+| `P` | Add one particle per emission and emit a 60-particle burst per ship |
 | `O` | Reduce particles per emission |
 | `Shift` + `=` | Increase ship speed |
 | `-` | Reduce ship speed |
@@ -43,12 +43,27 @@ In AoS mode, particles are `Particle` objects and each player's position is a
 in packed arrays. Each player continues to own its particle emitter.
 
 Switching modes transfers live state, so particles and ships continue from
-their current positions and ages. The player comparison times only movement
-updates, leaving particle simulation and drawing outside that measurement. The
-HUD reports rolling averages from the latest 120 frames and names a faster
-layout after it has at least 30 samples for each mode. Adding or removing ships
-clears those samples. Keep the ship count steady while comparing; the overall
-FPS also includes drawing and particle work.
+their current positions and ages. The HUD times player movement, particle
+updates, and particle drawing separately. It reports rolling averages from the
+latest 120 frames and names a faster layout after at least 30 samples for each
+mode. Adding or removing ships resets both comparisons; changing particle
+emission with `P` or `O` resets the particle comparisons. Keep the workload
+steady while comparing. The HUD includes the percentage difference for each
+measured winner.
+
+For a more visible particle comparison, press `R` several times to add ships,
+then press `P` a few times to increase continuous emission and create bursts.
+Press `B` to switch particle layouts and compare the particle update and draw
+timings after each mode has collected samples. The demo starts with only five
+ships, so its initial workload may be too small to show a clear difference.
+Overall FPS includes all drawing and is capped at 60, so use the microsecond
+timings rather than FPS to compare layouts.
+
+The SoA path still uses Python loops and scalar array reads and writes. Packed
+arrays reduce storage overhead, but they do not automatically turn those loops
+into vectorized machine code. With this intentionally simple implementation,
+the two layouts can be close, and AoS can even win. The HUD reports the result
+measured on the current workload rather than assuming SoA is faster.
 
 ## Build a package
 
