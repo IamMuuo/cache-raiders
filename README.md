@@ -1,4 +1,20 @@
-# Cache Raiders
+<p align="center">
+  <img src="src/cache_raiders/assets/branding/PyConKE%20Nairobi%20Sunset%20Emblem.png" alt="PyConKE Nairobi sunset emblem" width="260">
+</p>
+
+<h1 align="center">Cache Raiders</h1>
+
+<p align="center">
+  <img src="src/cache_raiders/assets/branding/shot1.png" alt="Cache Raiders gameplay with ships, particles, and live performance timings" width="100%">
+</p>
+
+<p align="center">
+  Thank you to the PyConKE organizers for the opportunity to share this project.
+</p>
+
+<p align="center">
+  If you enjoy it, please share it widely and star the repository. It really helps more people discover the project.
+</p>
 
 Cache Raiders is a small Pygame CE demo for a live talk about two ways to
 organize game data: one object per entity (array of structures, or AoS) and
